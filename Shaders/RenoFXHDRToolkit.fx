@@ -1869,7 +1869,7 @@ float4 MeasureAPL(
 		float2 texcoord : TexCoord) : SV_Target {
 	// HAnS owns HDR Boost availability for supported SDR input. The global APL
 	// limiter remains available whenever HAnS is disabled or bypassed for HDR.
-	if (HDR_BOOST_APL_LIMITER == 0 || HDR_BOOST <= 0.0f || HAnSShouldAnalyze()) {
+	if (HDR_BOOST_APL_LIMITER == 0 || HDR_BOOST <= 0.0f || HAnSOwnsBoostAvailability()) {
 		return 0.0f.xxxx;
 	}
 
@@ -1882,7 +1882,7 @@ float4 MeasureAPL(
 float ComputeAPLHDRBoostAvailability() {
 	if (HDR_BOOST_APL_LIMITER == 0
 			|| HDR_BOOST <= 0.0f
-			|| HAnSShouldAnalyze()) return 1.0f;
+			|| HAnSOwnsBoostAvailability()) return 1.0f;
 
 	float apl = tex2Dlod(
 			APLSampler,

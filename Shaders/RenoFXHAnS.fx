@@ -197,10 +197,23 @@ groupshared float4 HAnSHorizontalTile[HANS_GROUP_SIZE * HANS_TILE_EXTENT];
 groupshared float4 HAnSVerticalTile[HANS_TILE_EXTENT * HANS_GROUP_SIZE];
 #endif
 
+bool HAnSInputIsHDR() {
+	uint input_transfer = ResolveInputTransfer();
+	return input_transfer == INPUT_HDR10 || input_transfer == INPUT_SCRGB;
+}
+
 bool HAnSShouldAnalyze() {
 	if (HANS_MODE == HANS_MODE_OFF) return false;
-	uint input_transfer = ResolveInputTransfer();
-	return input_transfer != INPUT_HDR10 && input_transfer != INPUT_SCRGB;
+	// Native HDR analysis is added separately; this preserves the historical
+	// SDR-only behavior until then.
+	return !HAnSInputIsHDR();
+}
+
+// HAnS replaces the frame-global APL limiter only where it owns per-pixel HDR
+// Boost availability. Native HDR keeps the APL limiter active so the two can
+// compose as A_APL * A_local.
+bool HAnSOwnsBoostAvailability() {
+	return HAnSShouldAnalyze() && !HAnSInputIsHDR();
 }
 
 int HAnSRadius() {
