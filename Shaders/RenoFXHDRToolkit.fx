@@ -308,7 +308,7 @@ uniform uint HDR_BOOST_APL_LIMITER <
 	ui_category = "Inverse Tone Mapping";
 	ui_items = "Off\0On\0";
 	ui_label = "APL Limiter";
-	ui_tooltip = "Lowers inverse tone mapping based on the average luminance of the full scene. This prevents very bright scenes from becoming too bright. It is bypassed while HAnS Highlight Analysis is active for SDR input.";
+	ui_tooltip = "Lowers inverse tone mapping based on the average luminance of the full scene. This prevents very bright scenes from becoming too bright. It is bypassed while HAnS Highlight Analysis controls SDR input; native HDR keeps this limiter active alongside HAnS.";
 > = 1;
 
 uniform float HIGHLIGHTS <
@@ -1867,8 +1867,9 @@ float3 EncodeOutput(
 float4 MeasureAPL(
 		float4 position : SV_Position,
 		float2 texcoord : TexCoord) : SV_Target {
-	// HAnS owns HDR Boost availability for supported SDR input. The global APL
-	// limiter remains available whenever HAnS is disabled or bypassed for HDR.
+	// HAnS owns HDR Boost availability for SDR input. Native HDR keeps the
+	// global APL limiter active so it composes with HAnS (A_APL * A_local); the
+	// limiter also remains available whenever HAnS is disabled.
 	if (HDR_BOOST_APL_LIMITER == 0 || HDR_BOOST <= 0.0f || HAnSOwnsBoostAvailability()) {
 		return 0.0f.xxxx;
 	}

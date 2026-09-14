@@ -24,7 +24,7 @@ individual passes, so Off bypasses HAnS output but cannot omit the scheduled
 draws/dispatches. All HAnS shaders must return before texture sampling and
 filtering when analysis is disabled:
 
-1. `HAnSExtract` converts normalized linear BT.709 input to gamma 2.2 and packs minRGB, encoded BT.709 luma, and maxRGB into RGB. This follows the paper's display-referred method with modern BT.709 coefficients. Gamma encoding is not represented as a working space.
+1. `HAnSExtract` builds a normalized display-referred analysis signal (gamma 2.2 for SDR; absolute nits divided by the output peak for native HDR) and packs minRGB, encoded BT.709 luma, and maxRGB into RGB. This follows the paper's display-referred method with modern BT.709 coefficients. Gamma encoding is not represented as a working space.
 2. `HAnSBlurHorizontal` and `HAnSBlurVertical` apply the paper's moving average. D3D11/D3D12 run tiled 8x8 compute kernels with shared-memory halos; other APIs retain the pixel-pass fallback.
 3. `HAnSDilateHorizontal` and `HAnSDilateVertical` apply a component-wise maximum filter with the same footprint and the same compute/fallback split.
 4. `HAnSFuse` calculates positive local contrast, applies the $p=20$ sigmoid and absolute-intensity weighting, then stores the fused map in red and the three feature maps in GBA.
@@ -41,9 +41,10 @@ analysis texels.
 `Main` combines `HAnSLocalAvailability(texcoord)` with the frame-global APL
 availability and passes the product to `ApplyControls`. HAnS therefore affects
 HDR Boost only; grading, Neutwo, gamut compression, and presentation remain
-independent. Auto mode bypasses HAnS for HDR10/scRGB input. The analysis copy is
-clamped and converted to sRGB, but the scene-processing source remains linear
-and unclamped.
+independent. Auto mode analyzes both SDR and native HDR input. For SDR the
+analysis copy is clamped and converted to sRGB; for native HDR it is converted
+to absolute nits, normalized by the output peak, and gamma-encoded. The
+scene-processing source remains linear and unclamped.
 
 1. **`MeasureAveragePictureLevel`** calls `MeasureAPL`.
    - Decodes the back buffer with `DecodeInput`.

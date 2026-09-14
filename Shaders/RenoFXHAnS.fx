@@ -9,7 +9,7 @@
 #define RENOFX_HANS_INCLUDED 1
 
 #define HANS_MODE_OFF      0
-#define HANS_MODE_AUTO_SDR 1
+#define HANS_MODE_AUTO 1
 
 // Analysis runs at half resolution. The maximum analysis radius of 12 texels
 // therefore represents a 24-pixel radius in the source image.
@@ -33,10 +33,10 @@
 uniform uint HANS_MODE <
 	ui_type = "combo";
 	ui_category = "HAnS Highlight Analysis";
-	ui_items = "Off\0Auto (SDR Input)\0";
+	ui_items = "Off\0Auto (SDR + HDR)\0";
 	ui_label = "Highlight Analysis";
-	ui_tooltip = "Controls per-pixel HDR Boost using the HAnS highlight detector. Auto analyzes SDR input and bypasses native HDR. Active HAnS bypasses the global APL limiter.";
-> = HANS_MODE_AUTO_SDR;
+	ui_tooltip = "Controls per-pixel HDR Boost using the HAnS highlight detector. Auto analyzes SDR and native HDR input. HAnS bypasses the global APL limiter for SDR input; native HDR keeps the limiter active.";
+> = HANS_MODE_AUTO;
 
 uniform float HANS_SIZE <
 	ui_type = "slider";
@@ -203,10 +203,7 @@ bool HAnSInputIsHDR() {
 }
 
 bool HAnSShouldAnalyze() {
-	if (HANS_MODE == HANS_MODE_OFF) return false;
-	// Native HDR analysis is added separately; this preserves the historical
-	// SDR-only behavior until then.
-	return !HAnSInputIsHDR();
+	return HANS_MODE != HANS_MODE_OFF;
 }
 
 // HAnS replaces the frame-global APL limiter only where it owns per-pixel HDR
@@ -230,16 +227,32 @@ float3 HAnSAnalysisColor(float3 linear_bt709) {
 	return saturate(pow(linear_bt709, 1.0f / 2.2f));
 }
 
+// Native HDR analysis signal. HAnS thresholds are defined for normalized
+// display-referred values, so normalize absolute nits by the configured
+// output peak and reuse the same display-referred gamma. This keeps one
+// shared sigmoid threshold valid across SDR and HDR.
+float3 HAnSAnalysisColorHDR(float3 linear_bt709) {
+	float3 nits = max(linear_bt709, 0.0f) * max(ResolveInputScalingNits(), 1.0f);
+	float3 normalized = nits / max(TONEMAP_PEAK_NITS, 1.0f);
+	return saturate(pow(normalized, 1.0f / 2.2f));
+}
+
 float4 HAnSExtractFeatures(
 		float4 position : SV_Position,
 		float2 texcoord : TexCoord) : SV_Target {
 	if (!HAnSShouldAnalyze()) return 0.0f.xxxx;
 
-	// Paper thresholds are defined for normalized LDR data. Keep the selected
-	// analysis representation bounded while preserving RenoFX's linear source.
+	// Paper thresholds are defined for normalized display-referred data. Build
+	// a bounded analysis signal from the SDR or native HDR input while keeping
+	// RenoFX's linear source intact for actual processing.
 	float3 bt709 = DecodeInput(tex2D(ReShade::BackBuffer, texcoord).rgb);
-	float3 linear_bt709 = saturate(max(bt709, 0.0f));
-	float3 analysis = HAnSAnalysisColor(linear_bt709);
+	float3 analysis;
+	if (HAnSInputIsHDR()) {
+		analysis = HAnSAnalysisColorHDR(bt709);
+	} else {
+		float3 linear_bt709 = saturate(max(bt709, 0.0f));
+		analysis = HAnSAnalysisColor(linear_bt709);
+	}
 	float minimum = min(analysis.r, min(analysis.g, analysis.b));
 	// Match the paper's display-referred method using gamma-encoded RGB and
 	// modern BT.709 luma coefficients.
